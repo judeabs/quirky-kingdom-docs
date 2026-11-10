@@ -1,0 +1,49 @@
+%% 1. Jev proposal - search responsibilities
+flowchart TB
+  Shopper["Shopper query"] --> Finder["Finder module inside Medusa application"]
+  Finder --> Rules["Code: parse explicit numbers and currency<br/>Known filters and candidate text spans"]
+  Rules --> Need{"Unresolved semantic question?"}
+  Need -->|No| Contract["Code assembles and validates search contract"]
+  Need -->|Yes| Jev["Jev: typed judgments<br/>Choice: occasion, theme, budget basis<br/>Select quantity / budget from candidate spans"]
+  Jev --> Gate{"Required judgments meet tested thresholds?"}
+  Gate -->|Yes| Contract
+  Gate -->|Uncertain or no option fits| Clarify["Ask shopper to clarify<br/>Do not silently guess"]
+  Clarify --> Shopper
+  Jev -->|Timeout or API error| Fallback["Ordinary keyword and filter browse<br/>Preserve explicit constraints"]
+  Fallback --> Contract
+  Contract --> Search["Typesense retrieves and ranks catalogue candidates"]
+  Search --> Commerce["Medusa checks regional prices<br/>Age/safety eligibility and sufficient sellable stock"]
+  Commerce --> Results["Catalogue-grounded reasons and refine chips<br/>No-match or stock-shortfall explanation when needed"]
+  Results --> Shopper
+  %% Jev does not own prices, stock, safety rules or checkout.
+  %% Provider credentials stay server-side. Failure is not a negative judgment.
+  %% Truly free text may need a parser or generative model, evaluated separately.
+
+%% 2. Jev proposal - example search contract
+flowchart TB
+  Query["Return gifts for 20 kids under INR 300 each"] --> Parse["Code finds candidate values<br/>20 and INR 300"]
+  Parse --> Semantics["Jev resolves semantic roles when needed<br/>Occasion = return gift<br/>Quantity span = 20<br/>Budget span = INR 300<br/>Budget basis = per item"]
+  Semantics --> Validate["Code normalises and validates<br/>quantity: 20<br/>budget amount: 300<br/>currency: INR<br/>basis: per_item<br/>age: unknown"]
+  Validate --> Age{"Required age/safety information available?"}
+  Age -->|No| Ask["Ask for age when necessary<br/>Unknown is not safety approval"]
+  Ask --> Validate
+  Age -->|Yes| Filters["Build hard filters<br/>Price within budget, age eligibility, quantity 20"]
+  Filters --> Search["Typesense search"]
+  Search --> Check["Medusa validates variant price and sellable quantity"]
+  Check --> Display["Show matches and price scope<br/>Explain whether wrap/shipping are included"]
+  Ambiguous["Under INR 300, without each"] --> Question["Clarify per-item versus total budget"]
+  Question --> Query
+  %% This is an example application contract, not Jev's native API response.
+  %% Deterministic code may resolve explicit words such as each without Jev.
+
+%% 3. Jev proposal - evaluation before adoption
+flowchart LR
+  Cases["Representative query set<br/>Clear / ambiguous budgets, age, quantity<br/>Missing attributes, unknown themes, timeouts"] --> Baseline["Existing extractor design<br/>Run against the same expected contracts"]
+  Cases --> Candidate["Rules plus Jev candidate<br/>No production checkout authority"]
+  Baseline --> Compare["Compare contract accuracy<br/>Clarification behaviour and invalid outputs<br/>End-to-end latency, cost and implementation effort"]
+  Candidate --> Compare
+  Compare --> Decision{"Meets agreed quality and latency targets?"}
+  Decision -->|Yes| Review["Review evidence and approve adoption<br/>Then update architecture and technical plan"]
+  Decision -->|No| Retain["Keep current approach or refine proposal"]
+  %% No benchmark result, cost saving or faster implementation is claimed.
+  %% Calibrate thresholds on representative examples; never treat confidence as proof.

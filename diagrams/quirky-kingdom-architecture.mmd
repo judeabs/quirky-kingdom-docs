@@ -1,0 +1,168 @@
+%% 1. System context
+flowchart LR
+  Shopper["Shopper<br/>India INR first; GCC later"]
+  Staff["Operations and content team"]
+  subgraph Platform["Quirky Kingdom | self-hosted headless commerce"]
+    Store["Mobile storefront<br/>Browse, gifting, checkout, tracking"]
+    Support["Gift expert and bulk quotes"]
+  end
+  Shopper --> Store
+  Shopper --> Support
+  Staff --> Store
+  Staff --> Support
+  Store --> Pay["Razorpay primary / Cashfree fallback<br/>UPI, cards, net banking, wallets"]
+  Store --> Courier["Shiprocket<br/>Serviceability, shipping, tracking, COD"]
+  Store --> Messaging["MSG91 OTP / SES email<br/>Meta WhatsApp Cloud API"]
+  Store --> Model["Hosted intent model<br/>No payment or inventory authority"]
+  Support --> Chat["Staffed WhatsApp channel"]
+  Store -.-> GCC["Later: GCC providers, regional stock/tax<br/>AED and other currencies; Arabic / RTL"]
+  Store -.-> Future["Enhancements: personalisation, delivery slots<br/>same-day, video booking, automated reels"]
+
+%% 2. Components
+flowchart TB
+  Shopper["Shopper browser"] --> Web
+  Staff["Authenticated staff"] --> Admin
+  Editors["Content editors"] --> CMS
+  subgraph App["Application processes | AWS Mumbai launch proposal"]
+    Web["Next.js server<br/>Catalogue, Gift Studio, cart, tracking<br/>Guest checkout and OTP; newsletter"]
+    Admin["Medusa Admin<br/>Catalogue, quotes, orders and packing"]
+    subgraph Medusa["Medusa API | modules share the application"]
+      Core["Commerce and gift workflows<br/>Variants, stock, regional prices, discounts<br/>Wrap, 200-character note, recipient<br/>Gift snapshots and price-free slip"]
+      Identity["Customer identity and consent<br/>Ownership checks / signed guest links"]
+      Finder["Finder module<br/>Validated intent, filters, reasons and chips"]
+      Payment["Payment adapters<br/>Prepaid / COD / refunds"]
+      Shipping["Shipping adapter<br/>Pincode and delivery estimates"]
+      Hooks["Verified webhook handlers<br/>Deduplication and state reconciliation"]
+    end
+    CMS["Payload CMS<br/>Landing pages and curated reels"]
+    Worker["Workers<br/>Index sync, fulfillment, notifications<br/>Invoice PDFs and reconciliation"]
+  end
+  subgraph Data["Private data services"]
+    DB[("PostgreSQL<br/>Commerce, gift snapshots, attempts, consent<br/>CMS owns separate schema/database")]
+    Redis[("Redis<br/>Cache and job queue")]
+    Search[("Typesense<br/>Facets and keyword search<br/>Hybrid search after evaluation")]
+  end
+  subgraph External["External APIs and media"]
+    PG["Razorpay / Cashfree<br/>Hosted prepaid checkout"]
+    Carrier["Shiprocket<br/>Delivery events and COD reconciliation"]
+    OTP["MSG91"]
+    Notify["SES / Meta WhatsApp Cloud API"]
+    LLM["Hosted LLM provider"]
+    Media["S3 / CloudFront<br/>Product media and editorial assets"]
+  end
+  Web --> Core
+  Web --> Identity
+  Web --> Finder
+  Web --> CMS
+  Web -->|Filtered browsing| Search
+  Admin --> Core
+  Core --> Identity
+  Core --> Payment
+  Core --> Shipping
+  Identity --> OTP
+  Identity --> DB
+  Core --> DB
+  CMS --> DB
+  Core -->|Committed events with recovery and retry| Redis
+  Redis --> Worker
+  Worker -->|Upsert, delete, rebuild| Search
+  Worker --> Carrier
+  Worker -->|Consent and suppression checks| Notify
+  Worker --> DB
+  Finder --> LLM
+  Finder --> Search
+  Finder -->|Authoritative price and sellable quantity| Core
+  Payment --> PG
+  PG --> Hooks
+  Carrier --> Hooks
+  Hooks --> Core
+  Shipping --> Carrier
+  CMS --> Media
+  Core --> Media
+  Shopper -->|Images and media| Media
+  Shopper -->|Hosted payment UI; no card data in app| PG
+  Web -.-> Analytics["Umami analytics<br/>Consent-aware events"]
+  App -.-> Ops["OpenTelemetry / CloudWatch<br/>Alerts, backups and restore drills<br/>CI/CD; isolated dev, staging, production"]
+  Core -.-> Later["Extension points, proposed later<br/>Personalisation pricing; delivery capacity<br/>Booking; GCC regions and adapters"]
+  Later -.-> Web
+  %% Logical components are not one server each.
+  %% Launch may share a host; PostgreSQL is managed and staging is separate.
+  %% Single-host launch does not establish high availability.
+  %% One recipient per order is a working assumption.
+  %% Invoice interpretation and per-unit/package wrapping need approval.
+  %% Search is rebuildable; PostgreSQL is the authoritative order/payment ledger.
+
+%% 3. Checkout
+sequenceDiagram
+  autonumber
+  actor U as Shopper
+  participant S as Next.js
+  participant M as Medusa workflows
+  participant D as PostgreSQL
+  participant G as Prepaid gateway
+  participant C as Courier
+  participant W as Worker
+  U->>S: Cart, gift choices, address and method
+  S->>M: Scoped guest or authenticated request
+  M->>M: Validate ownership, stock, gift text and server prices
+  M->>C: Check serviceability and shipping options
+  C-->>M: Delivery estimate and eligible services
+  M->>M: Calculate tax, shipping and eligible prepaid discount
+  alt Prepaid
+    M->>D: Persist attempt, amount, currency and idempotency reference
+    M->>G: Create provider payment session
+    G-->>U: Hosted UPI / card / net banking / wallet UI
+    U->>G: Authorise payment
+    G->>M: Signed payment event
+    M->>M: Verify signature, amount, currency and reference
+    M->>D: Deduplicate event and persist verified state
+    U->>S: Request completion or poll status
+    S->>M: Retry-safe completion request
+    M->>G: Verify provider state if unresolved
+    Note over M,G: Pending or failed payment stays pending or retryable.<br/>Cashfree is for new attempts after resolving uncertain Razorpay state.
+  else COD
+    M->>M: Validate pincode, order value and COD policy
+    M->>D: Record unpaid courier-collection obligation
+  end
+  Note over M,D: Complete only when payment policy or COD eligibility permits.<br/>Use supported reservation / authorisation / capture workflow.<br/>Expire abandoned reservations and reconcile late events.
+  M->>D: Persist order and immutable gift / price snapshots
+  M-->>S: Confirmed order or current pending state
+  S-->>U: Show verified status, redirect alone is not payment proof
+  M->>W: Committed order event with retry and recovery
+  W->>C: Arrange shipment and tracking
+  W->>W: Packing instructions, invoice and recipient slip
+  W-->>U: Eligible WhatsApp / email notifications
+  C->>M: Authenticated tracking and COD collection updates
+  W->>C: Reconcile collection and remittance separately
+  opt Approved prepaid full or partial refund
+    M->>D: Record refund against original payment and line snapshots
+    M->>G: Idempotent refund request
+    G-->>M: Refund status / verified callback
+    M->>D: Persist outcome, reconcile pending or failed refund
+  end
+
+%% 4. AI search
+flowchart TB
+  Query["Shopper query or refine chip"] --> Input{"Input type"}
+  Input -->|New or edited text| Extract["Finder: extract intent via provider adapter<br/>Age, occasion, quantity, budget and basis<br/>Currency, theme, skill, battery/screen constraints"]
+  Input -->|Chip selection| Existing["Update existing structured filters<br/>No new model call"]
+  Extract --> Contract{"Schema valid and meaning clear?"}
+  Contract -->|Ambiguous budget or required detail missing| Clarify["Ask shopper to clarify<br/>Per-item vs total; gift/shipping inclusion"]
+  Clarify --> Answer["Wait for shopper response"]
+  Answer --> Extract
+  Contract -->|Timeout or invalid response| Fallback["Deterministic keyword / filter browse<br/>Keep known constraints; clarify unknown values"]
+  Contract -->|Yes| Filters["Apply hard filters<br/>Never infer safety from semantic similarity"]
+  Existing --> Filters
+  Fallback --> Filters
+  Filters --> Search["Typesense retrieval and ranking<br/>Keyword / facets initially<br/>Optional embeddings and hybrid ranking later"]
+  Search --> Check["Medusa: verify regional variant prices<br/>and enough sellable quantity for requested gifts"]
+  Check --> Match{"Eligible matches?"}
+  Match -->|Yes| Results["Ranked products with catalogue-grounded reasons<br/>and refine chips; latest request wins"]
+  Match -->|No| Empty["Explain no match or stock shortfall<br/>Offer refinements without silently relaxing constraints"]
+  Results --> Query
+  Empty --> Query
+  Results --> PDP["Product page and cart<br/>Revalidate price and stock at checkout"]
+  %% Finder remains a module; extraction failure must not block ordinary browsing.
+  %% Missing catalogue safety facts stay unknown.
+  %% Jev is an evaluation candidate, not an adopted provider in this plan.
+  %% Search target p95 below 3 seconds; extraction timeout 2 seconds; unmeasured.

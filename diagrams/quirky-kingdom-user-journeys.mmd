@@ -1,0 +1,147 @@
+%% 1. Find a gift with AI Toy Finder
+flowchart TB
+A["1. Open AI Toy Finder"] --> B["2. Describe age, occasion, quantity and budget"]
+B --> C{"Intent clear?"}
+C -->|No| D["Clarify per-item vs total budget"]
+D --> B
+C -->|Yes| E["Typesense filters and ranking<br/>Medusa checks price and quantity"]
+C -->|Model unavailable| F["Keyword and filter fallback"]
+F --> E
+E --> G["3. View matches, grounded reasons and refine chips"]
+G --> H{"4. Refine?"}
+H -->|Chip| E
+H -->|New text| B
+H -->|Choose product| I["5. Open product page<br/>Current price, options and pincode estimate"]
+
+%% 2. Browse the catalogue
+flowchart TB
+A["1. Shop by age, occasion, theme, skill or category<br/>Or Trending / Viral right now"] --> B["Medusa taxonomy and Payload curated content"]
+B --> C["2. View product listing<br/>Typesense results and CDN images"]
+C --> D["3. Filter and sort<br/>Selections retained in URL"]
+D --> E{"Matches?"}
+E -->|No| F["Broaden filters"]
+F --> D
+E -->|Yes| G["4. Open product page<br/>Medusa loads current variants and prices"]
+
+%% 3. Add a product to the cart
+flowchart TB
+A["1. Open product"] --> B["2. Choose colour / variant"]
+B --> C{"3. Personalisation offered?<br/>Proposed enhancement"}
+C -->|Yes| D["Enter name<br/>Server validates and prices surcharge"]
+C -->|No| E["4. Read safety and materials<br/>Choose optional gift add-ons"]
+D --> E
+E --> F["5. Enter pincode<br/>Check serviceability and estimate"]
+F --> G["6. Add to cart"]
+G --> H{"Variant, quantity and configuration valid?"}
+H -->|No| I["Show correction or stock message"]
+I --> B
+H -->|Yes| J["Open cart with server-priced lines<br/>Cart is not a stock guarantee"]
+
+%% 4. Send a gift
+flowchart TB
+A["1. Select toy and add to cart"] --> B["2. Open Gift Studio"]
+B --> C["3. Choose wrap<br/>Signature / Boys / Girls / Unisex / Eco"]
+C --> D["4. Note up to 200 characters<br/>Hide-price preference"]
+D --> E["5. Recipient address and pincode<br/>Date / slot / same-day when supported"]
+E --> F["Check shipping eligibility and capacity<br/>Date and slot selection is an enhancement"]
+F --> G{"6. Identity"}
+G -->|Sign in| H["Verify +91 SMS OTP<br/>Collect profile details when needed"]
+G -->|Guest| I["Scoped guest checkout"]
+H --> J["7. Select payment method<br/>Server applies eligible prepaid discount"]
+I --> J
+J --> K["8. Choose WhatsApp updates<br/>Separate marketing consent"]
+K --> L{"9. Place order"}
+L -->|Prepaid| M["Hosted gateway payment<br/>Server verifies state"]
+L -->|COD| N["Validate pincode and COD rules<br/>Record unpaid collection"]
+M --> O{"Payment confirmed?"}
+O -->|Pending or failed| P["Show status or retry safely<br/>Do not duplicate charges"]
+P --> M
+O -->|Yes| Q["Complete order and gift snapshots"]
+N --> Q
+Q --> R["Show confirmation<br/>Worker sends eligible messages and packing instructions"]
+%% One recipient per order is proposed. Invoice interpretation needs approval.
+
+%% 5. Buy for yourself
+flowchart TB
+A["1. Select variant and add to cart"] --> B["2. Skip Gift Studio<br/>No optional wrap charges"]
+B --> C["3. Enter address and pincode<br/>Saved address requires authenticated ownership"]
+C --> D["Check serviceability and shipping charges"]
+D --> E{"4. Identity"}
+E -->|Sign in| F["Verify +91 SMS OTP"]
+E -->|Guest| G["Scoped guest session"]
+F --> H["5. Reprice and check stock"]
+G --> H
+H --> I{"Payment method"}
+I -->|Prepaid| J["Hosted checkout and verified payment state"]
+I -->|COD| K["Eligibility check and unpaid collection obligation"]
+J --> L{"Completion permitted?"}
+K --> L
+L -->|No| M["Show pending state or correct checkout details"]
+M --> H
+L -->|Yes| N["6. Confirmation"]
+N --> O["My orders or signed guest link<br/>Track parcel"]
+
+%% 6. Track an order
+flowchart TB
+A{"Access route"} -->|Account| B["1. Open Login / Account"]
+B --> C["2. Verify +91 SMS OTP"]
+A -->|Message link| D["2. Open scoped tracking link"]
+C --> E{"Authorised order access?"}
+D --> E
+E -->|Expired link or not verified| F["Request renewed verification"]
+F --> C
+E -->|Yes| G["3. View confirmed / shipped / out for delivery / delivered"]
+H["Authenticated courier events<br/>Deduplicate and reconcile"] --> G
+H --> I["4. Worker sends eligible WhatsApp / email updates"]
+G --> J{"COD order?"}
+J -->|Yes| K["5. Pay delivery person"]
+K --> L["Record collection<br/>Reconcile merchant remittance separately"]
+J -->|No| M["Delivery complete"]
+
+%% 7. Return gifts or a bulk order
+flowchart TB
+A["1. Find suitable toys<br/>Clarify per-item vs total budget"] --> B["2. Set quantities and add items"]
+B --> C["Medusa checks stock and approved quantity pricing"]
+C --> D["3. Optional wrap and note per child<br/>Distinct configurations stay separate"]
+D --> E{"4. Checkout or quote?"}
+E -->|Checkout available| F["Sign in or guest checkout"]
+E -->|Quote required| G["Submit site / WhatsApp inquiry"]
+G --> H["Staff confirms price and stock"]
+H --> I["Approved quote and controlled checkout link"]
+I --> J["Sign in and revalidate quote expiry / stock"]
+J --> K["Pay and complete order"]
+F --> K
+K --> L["5. Track through My orders or messages"]
+%% Inquiry and unpaid quote are not confirmed paid orders.
+
+%% 8. Talk to a gift expert
+flowchart TB
+A["1. Tap Talk to a gift expert"] --> B["2. Open staffed WhatsApp chat<br/>Share age, occasion, budget and quantity"]
+B --> C["3. Expert sends product links"]
+C --> D["Open storefront<br/>Fetch current prices and availability"]
+D --> E["4. Add recommended items"]
+E --> F{"Book video call?<br/>Proposed enhancement"}
+F -->|Yes| G["Check staff availability<br/>Record appointment and meeting link"]
+F -->|No| H["5. Open cart and choose gift options"]
+G --> H
+H --> I["Sign in or guest checkout<br/>Server validates approved quotes / discounts"]
+I --> J["Pay and confirm order"]
+%% Chat does not grant account access, reserve stock or imply marketing consent.
+
+%% 9. Join the newsletter
+flowchart TB
+A["1. Open footer form or newsletter popup"] --> B["2. Enter email and subscribe"]
+B --> C{"Email valid and request accepted?"}
+C -->|No| D["Show validation or retry message"]
+D --> B
+C -->|Yes| E["Deduplicate subscription and record consent"]
+E --> F{"Double opt-in adopted?"}
+F -->|Yes| G["3. Show pending confirmation<br/>Worker sends verification link"]
+G --> H["Visitor confirms email"]
+H --> I["Active subscription"]
+F -->|No| J["3. Show thank-you message"]
+J --> I
+I --> K["Worker checks consent and suppression<br/>Send newsletter"]
+K --> L["4. Follow store, Finder or collection links"]
+K --> M["Unsubscribe"]
+M --> N["Suppress future newsletter sends"]
